@@ -7,5 +7,5 @@ The code is implemented with Python 3.9, [PyTorch 2.1.1](https://pytorch.org/), 
 
 Results can be reproduced by running on terminal:
 ```
-./run_experiments.sh
+python main.py
 ```
