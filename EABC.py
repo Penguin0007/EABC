@@ -161,12 +161,8 @@ class EABC(object):
 
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-        
-        if self.total_it % self.policy_freq == 0:
-            return {"target_q":target_Qs,
-                    "current_q":current_Qs,
-                    "q":Qs}
-
+            
+            return {"target_q":target_Qs, "current_q":current_Qs, "q":Qs}
 
     def save(self, filename):
         torch.save(self.critic.state_dict(), filename + "_critic")
