@@ -25,23 +25,23 @@ envs=["halfcheetah-random-v2",
     "hopper-medium-replay-v2",
     "walker2d-medium-replay-v2"]
 
-bestqs={"halfcheetah-random-v2":0.05,
-       "halfcheetah-medium-v2": 0.05,
-       "halfcheetah-medium-replay-v2": 0.05,
+bestps={"halfcheetah-random-v2":0.0,
+       "halfcheetah-medium-v2": 0.0,
+       "halfcheetah-medium-replay-v2": 0.0,
        "halfcheetah-medium-expert-v2":1.0 ,
-       "halfcheetah-expert-v2":1.0,
+       "halfcheetah-expert-v2":0.5,
        
-       "hopper-random-v2":0.05,
-       "hopper-medium-v2":0.9,
-       "hopper-medium-replay-v2":0.45,
-       "hopper-medium-expert-v2":0.9,
-       "hopper-expert-v2":0.9,
+       "hopper-random-v2":0.0,
+       "hopper-medium-v2":0.25,
+       "hopper-medium-replay-v2":0.0,
+       "hopper-medium-expert-v2":0.5,
+       "hopper-expert-v2":1.0,
        
-       "walker2d-random-v2":0.0,
-       "walker2d-medium-v2":1.0,
+       "walker2d-random-v2":0.95,
+       "walker2d-medium-v2":0.25,
        "walker2d-medium-replay-v2":0.0,
-       "walker2d-medium-expert-v2":1.0,
-       "walker2d-expert-v2":1.0}
+       "walker2d-medium-expert-v2":0.25,
+       "walker2d-expert-v2":0.5}
 
 # Runs policy for X episodes and returns D4RL score
 # A fixed seed is used for the eval environment
@@ -69,9 +69,9 @@ def eval_policy(policy, env_name, seed, mean, std, seed_offset=100, eval_episode
 
 def main(args):
     
-    file_name = f"{args.policy}{args.q}_k{args.num_critics}_{args.env}_{args.seed}"
+    file_name = f"{args.policy}{args.conf_level}_k{args.num_critics}_{args.env}_{args.seed}"
     print("---------------------------------------")
-    print(f"Policy: {args.policy}, Env: {args.env}, K: {args.num_critics}, q: {args.q}, Seed: {args.seed}")
+    print(f"Policy: {args.policy}, Env: {args.env}, K: {args.num_critics}, Confidence level: {args.conf_level}, Seed: {args.seed}")
     print("---------------------------------------")
 
     if not os.path.exists("./results"):
@@ -108,7 +108,8 @@ def main(args):
         # TD3 + BC
         "alpha": args.alpha,
         # EABC
-        "num_critics": args.num_critics
+        "num_critics": args.num_critics,
+        'conf_level': args.conf_level
     }
 
     # Initialize policy
@@ -117,7 +118,6 @@ def main(args):
     if args.load_model != "":
         policy_file = file_name if args.load_model == "default" else args.load_model
         policy.load(f"./models/{policy_file}")
-        
         info_log = torch.load(f"./infos/{file_name}")
         start_it = info_log["iter"]
         policy.total_it = start_it
@@ -141,16 +141,14 @@ def main(args):
     
     
     for t in range(start_it, int(args.max_timesteps)):
-        info = policy.train(replay_buffer, args.batch_size, args.q)
+        policy.train(replay_buffer, args.batch_size)
         # Evaluate episode
         if (t + 1) % args.eval_freq == 0:
             print(f"Time steps: {t+1}")
             evaluations.append(eval_policy(policy, args.env, args.seed, mean, std))
             np.save(f"./results/{file_name}", evaluations)
             
-            for key in info:
-                info_log[key].append(info[key])
-            info_log['iter'] = t + 1
+            info_log['iter'] = t+1
             torch.save(info_log, f"./infos/{file_name}")
             
             if args.save_model: policy.save(f"./models/{file_name}")
@@ -179,7 +177,7 @@ if __name__ == "__main__":
     parser.add_argument("--normalize", default=True)
     # EABC
     parser.add_argument("--num_critics", default=10, type=int)
-    parser.add_argument("--q", type = float)
+    parser.add_argument("--conf_level", type = float)
     args = parser.parse_args()
     
     seeds=list(range(5))
@@ -187,5 +185,5 @@ if __name__ == "__main__":
         args.seed = i
         for env in envs:
             args.env = env
-            args.q = bestqs[env]
+            args.conf_level = bestps[env]
             main(args)

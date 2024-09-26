@@ -67,6 +67,7 @@ class EABC(object):
         noise_clip=0.5,
         policy_freq=2,
         alpha=2.5,
+        conf_level=None
     ):
 
         self.actor = Actor(state_dim, action_dim, max_action).to(device)
@@ -85,6 +86,7 @@ class EABC(object):
         self.noise_clip = noise_clip
         self.policy_freq = policy_freq
         self.alpha = alpha
+        self.conf_level = conf_level
 
         self.total_it = 0
 
@@ -94,7 +96,7 @@ class EABC(object):
         return self.actor(state).cpu().data.numpy().flatten()
 
 
-    def train(self, replay_buffer, batch_size=256, q=None):
+    def train(self, replay_buffer, batch_size=256):
         self.total_it += 1
 
         # Sample replay buffer
@@ -110,22 +112,13 @@ class EABC(object):
                 self.actor_target(next_state) + noise
             ).clamp(-self.max_action, self.max_action)
 
-            # Compute the target Q value and target performance indicator
+            # Compute the target Q value
             target_Qs = self.critic_target(next_state, next_action)
-            target_qbar = target_Qs.mean(1, keepdim=True)
-            target_qstd = target_Qs.std(1, keepdim=True)
-            
-            target_Q = target_qbar - target_qstd
+            target_Q = target_Qs.mean(1, keepdim=True) - target_Qs.std(1, keepdim=True)
             target_Q = reward + not_done * self.discount * target_Q
             
-        # Get current Q estimates and current performance indicator (to be used later in actor update)
+        # Get current Q estimates
         current_Qs = self.critic(state, action)
-        current_qbar = current_Qs.mean(1, keepdim=True)
-        current_qstd = current_Qs.std(1, keepdim=True)
-        
-        current_qt = current_Qs.quantile(q, 1, keepdim=True)
-        current_upper = current_qbar + current_qstd/np.sqrt(self.num_critics)
-        current_perform_indicator = (current_qt > current_upper)*1
 
         # Compute critic loss
         critic_loss = torch.sum((current_Qs-target_Q)**2, 1).mean()
@@ -142,13 +135,11 @@ class EABC(object):
             # Compute actor loss
             pi = self.actor(state)
             Qs = self.critic(state, pi)
-            qbar = Qs.mean(1, keepdim=True)
-            qstd = Qs.std(1, keepdim=True)
-            
-            Q = qbar - qstd
+            Q = Qs.mean(1, keepdim=True) - Qs.std(1, keepdim=True)
             lmbda = self.alpha/Q.abs().mean().detach()
-
-            actor_loss = -lmbda * Q.mean() + (current_perform_indicator*torch.mean((pi-action)**2, 1, keepdim=True)).mean()
+            indicator = torch.bernoulli(torch.full([batch_size, 1], self.conf_level)).to(device)
+            
+            actor_loss = -lmbda * Q.mean() + (indicator*torch.mean((pi-action)**2, 1, keepdim=True)).mean()
 
             # Optimize the actor
             self.actor_optimizer.zero_grad()
@@ -162,7 +153,6 @@ class EABC(object):
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
             
-            return {"target_q":target_Qs, "current_q":current_Qs, "q":Qs}
 
     def save(self, filename):
         torch.save(self.critic.state_dict(), filename + "_critic")
