@@ -1,4 +1,4 @@
-# Ensemble-based Offline Reinforcement Learning with Adaptive Behavior Cloning
+# Confidence-Guided Offline Reinforcement Learning With Ensembles
 
 Author's PyTorch implementation of EABC. EABC is an ensemble based offline RL algorithm built upon TD3+BC, with adjustable behavior cloning term. It achieves more stable and better performance on D4RL MuJoCo benchmarks. The implementation is built on top of official repository of [TD3+BC](https://github.com/sfujim/TD3_BC.git) and [wPC](https://github.com/qsa-fox/wPC).
 
